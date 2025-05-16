@@ -41,7 +41,7 @@ ylabel('T(r) [°C]')
 title('Radial Temperature Distribution')
 grid on
 r_loop=r;
-filename = 'temperature.dat';
+filename = 'temperature_25.dat';
 fileID = fopen(filename, 'r');
 data = fscanf(fileID, '%f', [2, Inf]);
 fclose(fileID);
@@ -51,7 +51,8 @@ data = data';
 x = data(:, 1);
 y = data(:, 2);
 plot(x,y,'o');
-legend("Analytical","Numerical")
+
+legend("Analytical","Medium Mesh - Numerical")
 %% #3
 syms A_prime B_prime r
 E_prime=E/(1-nu^2);
@@ -65,14 +66,11 @@ B_prime=double(sol(2));
 
 for i=1:1:ab
 sigma_r(i)=-((E_prime*alpha)/r_loop(i)^2)*integral(fun,a,r_loop(i))+A_prime-B_prime/(r_loop(i)^2);
-%sigma_teta(i)=((E_prime*alpha)/r_loop(i)^2)*integral(fun,a,r_loop(i))+A_prime+B_prime/(r_loop(i)^2)-E_prime*alpha*theta(i);
 sigma_teta(i)=-sigma_r(i)-E_prime*alpha*theta(i)+2*A_prime;
 sigma_z(i)=nu*(sigma_r(i)+sigma_teta(i));
 end
 
-%filename = 'stress.dat'; %1
-%filename= 'stress_closed.dat'; %2
-filename = 'stress_what.dat'; %1
+filename = 'stress_25.dat'; %1
 
 fileID = fopen(filename, 'r');
 data = fscanf(fileID, '%f', [4, Inf]);
@@ -84,9 +82,12 @@ data = data';
 % Separate into two arrays
 r = data(:, 1);
 sigma_r_ansys = data(:, 2);
+%25
 sigma_theta_ansys = data(:, 3);
 sigma_z_ansys = data(:, 4);
-
+%10, 50
+% sigma_theta_ansys = data(:, 4);
+% sigma_z_ansys = data(:, 3);
 %% Plot
 figure()
 grid on;
@@ -103,3 +104,34 @@ plot(r*1000,sigma_z_ansys,'o','Color','b');
 
 legend("σ_r analytical","σ_θ analytical","σ_z analytical","σ_r numerical","σ_θ numerical","σ_z numerical")
 grid on;
+
+%% Mesh independency
+clear sigma_r sigma_teta sigma_z
+rl=(r);
+for i=1:length(r)
+    % Recalculate theta at each radial point
+    theta_i = Ti + term1 + term2 * log(rl(i));
+
+    % Compute sigma_r
+    sigma_r(i) = -((E_prime * alpha) / rl(i)^2) * integral(fun, a, rl(i)) + A_prime - B_prime / (rl(i)^2);
+
+    % Use local theta_i for other stress components
+    sigma_teta(i) = -sigma_r(i) - E_prime * alpha * theta_i + 2 * A_prime;
+    sigma_z(i) = nu * (sigma_r(i) + sigma_teta(i));
+sigma_r(i)=sigma_r(i)/10^6;
+sigma_teta(i)=sigma_teta(i)/10^6;
+sigma_z(i)=sigma_z(i)/10^6;
+end
+sigma_r(1)=sigma_r_ansys(1);
+error_sigma_r = 100*abs(abs(sigma_r) - abs(sigma_r_ansys'))./abs(sigma_r);
+error_sigma_teta = 100*abs(abs(sigma_teta) - abs(sigma_theta_ansys'))./abs(sigma_teta);
+error_sigma_z = 100*abs(abs(sigma_z) - abs(sigma_z_ansys'))./abs(sigma_z);
+figure;
+hold on;
+%plot([0.1,0.25],[0.05,0.05]);
+plot(rl, error_sigma_r, 'o--', 'Color', 'g'); 
+plot(rl, error_sigma_teta, 'o--', 'Color', 'b'); 
+plot(rl, error_sigma_z, 'o--', 'Color', 'r'); 
+legend("σ_r error","σ_θ error","σ_z error")
+xlabel('r [mm]')
+ylabel('Error compared to the analytical solution [%]')
